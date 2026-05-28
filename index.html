@@ -860,7 +860,9 @@
                         story,
                         estimatedBy: estimatedBy.map(userId => {
                             const [name, role] = userId.split('_');
-                            return { userId, name, role, points: storyEstimations[userId] };
+                            const estimation = storyEstimations[userId];
+                            const points = typeof estimation === 'object' ? estimation.points : estimation;
+                            return { userId, name, role, points: points };
                         }),
                         notEstimatedBy: notEstimatedBy.map(userId => {
                             const [name, role] = userId.split('_');
@@ -876,7 +878,12 @@
                 const completeStories = status.filter(s => s.isComplete);
                 
                 return completeStories.map(storyStatus => {
-                    const estimates = storyStatus.estimatedBy.map(e => e.points);
+                    const estimates = storyStatus.estimatedBy
+                        .map(e => e.points)
+                        .filter(p => p !== null && p !== undefined && !isNaN(p));
+                    
+                    if (estimates.length === 0) return null;
+                    
                     const average = estimates.reduce((a, b) => a + b, 0) / estimates.length;
                     const min = Math.min(...estimates);
                     const max = Math.max(...estimates);
@@ -895,7 +902,7 @@
                         mode: parseInt(mode),
                         consensus: min === max
                     };
-                });
+                }).filter(summary => summary !== null);
             };
 
             // Show session selection if user is logged in but no session
