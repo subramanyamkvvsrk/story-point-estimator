@@ -174,13 +174,98 @@
                 return 'session_' + Math.random().toString(36).substr(2, 9);
             };
 
-            const saveSession = (id, sessionData) => {
-                localStorage.setItem(`session_${id}`, JSON.stringify(sessionData));
+            // API Configuration
+            const API_BASE = window.location.origin + '/api';
+
+            // API Helper functions
+            const api = {
+                async getSession(sessionId) {
+                    try {
+                        const response = await fetch(`${API_BASE}/sessions/${sessionId}`);
+                        if (response.ok) {
+                            return await response.json();
+                        }
+                        return null;
+                    } catch (error) {
+                        console.error('Error fetching session:', error);
+                        return null;
+                    }
+                },
+
+                async createSession(sessionId, sessionData) {
+                    try {
+                        const response = await fetch(`${API_BASE}/sessions`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ sessionId, sessionData }),
+                        });
+                        if (response.ok) {
+                            return await response.json();
+                        }
+                        throw new Error('Failed to create session');
+                    } catch (error) {
+                        console.error('Error creating session:', error);
+                        throw error;
+                    }
+                },
+
+                async updateSession(sessionId, sessionData) {
+                    try {
+                        const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ sessionData }),
+                        });
+                        if (response.ok) {
+                            return await response.json();
+                        }
+                        throw new Error('Failed to update session');
+                    } catch (error) {
+                        console.error('Error updating session:', error);
+                        throw error;
+                    }
+                },
+
+                async addParticipant(sessionId, participant) {
+                    try {
+                        const response = await fetch(`${API_BASE}/sessions/${sessionId}/participants`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ participant }),
+                        });
+                        if (response.ok) {
+                            return await response.json();
+                        }
+                        throw new Error('Failed to add participant');
+                    } catch (error) {
+                        console.error('Error adding participant:', error);
+                        throw error;
+                    }
+                }
             };
 
-            const getSession = (id) => {
-                const session = localStorage.getItem(`session_${id}`);
-                return session ? JSON.parse(session) : null;
+            const saveSession = async (id, sessionData) => {
+                try {
+                    await api.updateSession(id, sessionData);
+                } catch (error) {
+                    console.error('Failed to save session:', error);
+                }
+            };
+
+            const getSession = async (id) => {
+                try {
+                    const session = await api.getSession(id);
+                    return session;
+                } catch (error) {
+                    console.error('Failed to load session:', error);
+                    return null;
+                }
             };
 
             // Load user and session data from localStorage on component mount
@@ -207,61 +292,78 @@
 
             // Load session when user or sessionId changes
             useEffect(() => {
-                if (user && sessionId) {
-                    let session = getSession(sessionId);
+                const loadSessionData = async () => {
+                    if (!user || !sessionId) return;
                     
-                    if (session) {
-                        // Check if session is closed
-                        if (session.status === 'closed') {
-                            alert(`This session has been closed by ${session.closedBy}. You will be logged out.`);
-                            setUser(null);
-                            setCurrentSession(null);
-                            setSessionId('');
-                            setStories([]);
-                            localStorage.removeItem('storyPointEstimatorSessionId');
-                            localStorage.removeItem('storyPointEstimatorUser');
-                            return;
-                        }
+                    try {
+                        let session = await getSession(sessionId);
                         
-                        // Add user to participants if not already there
-                        const existingUser = session.participants.find(p => p.name === user.name && p.role === user.role);
-                        if (!existingUser) {
-                            session.participants.push({ ...user, joinedAt: new Date().toISOString() });
-                            saveSession(sessionId, session);
+                        if (session) {
+                            // Check if session is closed
+                            if (session.status === 'closed') {
+                                alert(`This session has been closed by ${session.closedBy}. You will be logged out.`);
+                                setUser(null);
+                                setCurrentSession(null);
+                                setSessionId('');
+                                setStories([]);
+                                localStorage.removeItem('storyPointEstimatorSessionId');
+                                localStorage.removeItem('storyPointEstimatorUser');
+                                return;
+                            }
+                            
+                            // Add user to participants if not already there
+                            const existingUser = session.participants.find(p => p.name === user.name && p.role === user.role);
+                            if (!existingUser) {
+                                await api.addParticipant(sessionId, user);
+                                session = await getSession(sessionId); // Reload session
+                            }
+                            setCurrentSession(session);
+                            setStories(session.stories || []);
+                            localStorage.setItem('storyPointEstimatorSessionId', sessionId);
+                        } else {
+                            // Session doesn't exist - create it automatically
+                            console.log(`Creating new session: ${sessionId}`);
+                            const newSession = {
+                                id: sessionId,
+                                createdBy: user.name,
+                                createdAt: new Date().toISOString(),
+                                participants: [{ ...user, joinedAt: new Date().toISOString() }],
+                                stories: [],
+                                estimations: {},
+                                completedStories: {},
+                                minimumActiveUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+                                teamName: 'Team',
+                                sprintValue: 'Current Sprint',
+                                status: 'active'
+                            };
+                            await api.createSession(sessionId, newSession);
+                            setCurrentSession(newSession);
+                            setStories([]);
+                            localStorage.setItem('storyPointEstimatorSessionId', sessionId);
                         }
-                        setCurrentSession(session);
-                        setStories(session.stories || []);
-                        localStorage.setItem('storyPointEstimatorSessionId', sessionId);
-                    } else {
-                        // Session doesn't exist - create it automatically
-                        console.log(`Creating new session: ${sessionId}`);
-                        const newSession = {
-                            id: sessionId,
-                            createdBy: user.name,
-                            createdAt: new Date().toISOString(),
-                            participants: [{ ...user, joinedAt: new Date().toISOString() }],
-                            stories: [],
-                            status: 'active'
-                        };
-                        saveSession(sessionId, newSession);
-                        setCurrentSession(newSession);
-                        setStories([]);
-                        localStorage.setItem('storyPointEstimatorSessionId', sessionId);
+                    } catch (error) {
+                        console.error('Error loading session:', error);
+                        alert('Failed to load session data. Please try again.');
                     }
-                }
+                };
+
+                loadSessionData();
             }, [user, sessionId]);
 
             // Save session data whenever stories change
             useEffect(() => {
-                if (currentSession && sessionId) {
-                    const updatedSession = {
-                        ...currentSession,
-                        stories: stories,
-                        lastUpdated: new Date().toISOString()
-                    };
-                    setCurrentSession(updatedSession);
-                    saveSession(sessionId, updatedSession);
-                }
+                const updateSession = async () => {
+                    if (currentSession && sessionId && stories) {
+                        const updatedSession = {
+                            ...currentSession,
+                            stories: stories,
+                            lastUpdated: new Date().toISOString()
+                        };
+                        setCurrentSession(updatedSession);
+                        await saveSession(sessionId, updatedSession);
+                    }
+                };
+                updateSession();
             }, [stories]);
 
             // Save user to localStorage whenever user changes
@@ -270,6 +372,25 @@
                     localStorage.setItem('storyPointEstimatorUser', JSON.stringify(user));
                 }
             }, [user]);
+
+            // Auto-refresh session data every 5 seconds
+            useEffect(() => {
+                if (!sessionId || !user) return;
+
+                const interval = setInterval(async () => {
+                    try {
+                        const session = await getSession(sessionId);
+                        if (session) {
+                            setCurrentSession(session);
+                            setStories(session.stories || []);
+                        }
+                    } catch (error) {
+                        console.error('Auto-refresh failed:', error);
+                    }
+                }, 5000);
+
+                return () => clearInterval(interval);
+            }, [sessionId, user]);
 
             const extractTicketId = (input) => {
                 // Check if it's a URL
@@ -965,6 +1086,9 @@
                                     <div>
                                         <h1 className="text-2xl font-bold text-gray-900">
                                             Story Point Estimator
+                                            <span className="text-sm font-normal text-green-600 ml-2">
+                                                🚀 Server-Based (Team Sync)
+                                            </span>
                                             {currentSession && currentSession.teamName && (
                                                 <span className="text-xl text-primary-600 ml-3">
                                                     - {currentSession.teamName}
