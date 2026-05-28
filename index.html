@@ -432,12 +432,18 @@
                 setStories(stories.filter(story => story.id !== id));
             };
 
+            // Get current user's estimation for a story
+            const getUserEstimation = (storyId) => {
+                if (!currentSession || !currentSession.estimations || !currentSession.estimations[storyId]) {
+                    return null;
+                }
+                const userKey = `${user.name}_${user.role}`;
+                const estimation = currentSession.estimations[storyId][userKey];
+                return estimation ? (typeof estimation === 'object' ? estimation.points : estimation) : null;
+            };
+
             const updateStoryPoints = (id, points, reason = null) => {
-                // Update story points and track user estimation
-                setStories(stories.map(story => 
-                    story.id === id ? { ...story, points } : story
-                ));
-                
+                // Only track estimation by user, don't update shared story points
                 // Track estimation by user
                 if (currentSession) {
                     const updatedEstimations = { ...currentSession.estimations };
@@ -831,10 +837,13 @@
             };
 
             const totalPoints = stories
-                .filter(story => story.points !== null)
-                .reduce((sum, story) => sum + story.points, 0);
+                .map(story => getUserEstimation(story.id))
+                .filter(points => points !== null)
+                .reduce((sum, points) => sum + points, 0);
 
-            const estimatedStories = stories.filter(story => story.points !== null).length;
+            const estimatedStories = stories
+                .map(story => getUserEstimation(story.id))
+                .filter(points => points !== null).length;
 
             // Dashboard functions
             const getEstimationStatus = () => {
@@ -1623,7 +1632,7 @@
                                                         key={point}
                                                         onClick={() => handleRoleEstimation(story.id, point)}
                                                         className={`px-3 py-2 rounded-md border font-medium transition-colors ${
-                                                            story.points === point
+                                                            getUserEstimation(story.id) === point
                                                                 ? 'bg-primary-600 text-white border-primary-600'
                                                                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                                                         }`}
@@ -1634,7 +1643,7 @@
                                                 <button
                                                     onClick={() => handleRoleEstimation(story.id, null)}
                                                     className={`px-3 py-2 rounded-md border font-medium transition-colors ${
-                                                        story.points === null
+                                                        getUserEstimation(story.id) === null
                                                             ? 'bg-gray-600 text-white border-gray-600'
                                                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                                                     }`}
@@ -1642,6 +1651,15 @@
                                                     ?
                                                 </button>
                                             </div>
+
+                                            {/* Current User's Estimation Feedback */}
+                                            {getUserEstimation(story.id) !== null && (
+                                                <div className="mt-3">
+                                                    <p className="text-sm text-green-600 font-medium">
+                                                        ✓ Your estimate: {getUserEstimation(story.id)} points
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {/* Developer Reason Selection */}
                                             {showDevReason === story.id && user.role === 'Dev' && (
