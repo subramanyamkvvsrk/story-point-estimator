@@ -754,28 +754,41 @@
                 setSprintValue('');
             };
 
-            const joinSession = (id) => {
-                const session = getSession(id);
-                if (session) {
-                    // Check if session is closed
-                    if (session.status === 'closed') {
-                        alert(`This session has been closed by ${session.closedBy} on ${new Date(session.closedAt).toLocaleString()}. Please create a new session or join a different one.`);
-                        return;
+            const joinSession = async (id) => {
+                try {
+                    const session = await getSession(id);
+                    if (session) {
+                        // Check if session is closed
+                        if (session.status === 'closed') {
+                            alert(`This session has been closed by ${session.closedBy} on ${new Date(session.closedAt).toLocaleString()}. Please create a new session or join a different one.`);
+                            return;
+                        }
+                        
+                        // Ensure participants array exists
+                        if (!session.participants) {
+                            session.participants = [];
+                        }
+                        
+                        // Add user to participants if not already there
+                        const existingUser = session.participants.find(p => p.name === user.name && p.role === user.role);
+                        if (!existingUser) {
+                            await api.addParticipant(id, user);
+                            // Reload session to get updated participants list
+                            const updatedSession = await getSession(id);
+                            setCurrentSession(updatedSession);
+                        } else {
+                            setCurrentSession(session);
+                        }
+                        
+                        setSessionId(id);
+                        setStories(session.stories || []);
+                        localStorage.setItem('storyPointEstimatorSessionId', id);
+                    } else {
+                        alert('Session not found!');
                     }
-                    
-                    // Add user to participants if not already there
-                    const existingUser = session.participants.find(p => p.name === user.name && p.role === user.role);
-                    if (!existingUser) {
-                        session.participants.push(user);
-                        saveSession(id, session);
-                    }
-                    
-                    setCurrentSession(session);
-                    setSessionId(id);
-                    setStories(session.stories || []);
-                    localStorage.setItem('storyPointEstimatorSessionId', id);
-                } else {
-                    alert('Session not found!');
+                } catch (error) {
+                    console.error('Error joining session:', error);
+                    alert('Failed to join session. Please try again.');
                 }
             };
 
@@ -1007,7 +1020,11 @@
                                             onChange={(e) => setSessionId(e.target.value)}
                                             placeholder="Enter session ID"
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-3"
-                                            onKeyPress={(e) => e.key === 'Enter' && sessionId.trim() && joinSession(sessionId)}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter' && sessionId.trim()) {
+                                                    joinSession(sessionId);
+                                                }
+                                            }}
                                         />
                                         <button
                                             onClick={() => joinSession(sessionId)}
