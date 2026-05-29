@@ -1226,26 +1226,49 @@
                             <div className="bg-white p-6 rounded-lg shadow-sm border mb-8">
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-lg font-semibold text-gray-900">Estimation Dashboard</h2>
-                                    <button
-                                        onClick={downloadEstimationSummary}
-                                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium flex items-center gap-2"
-                                        title="Download estimation summary as Excel file"
-                                    >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        Download Summary
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => console.log('DEBUG:', { stories, currentSession, estimations: currentSession?.estimations })}
+                                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
+                                            title="Debug dashboard data"
+                                        >
+                                            Debug
+                                        </button>
+                                        <button
+                                            onClick={downloadEstimationSummary}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium flex items-center gap-2"
+                                            title="Download estimation summary as Excel file"
+                                        >
+                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Download Summary
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 {(() => {
                                     try {
                                         const estimationStatus = getEstimationStatus();
                                         
+                                        // Debug info
+                                        console.log('Dashboard Debug:', {
+                                            stories: stories,
+                                            storiesLength: stories?.length,
+                                            currentSession: currentSession,
+                                            estimations: currentSession?.estimations,
+                                            estimationStatus: estimationStatus
+                                        });
+                                        
                                         if (!Array.isArray(estimationStatus) || estimationStatus.length === 0) {
                                             return (
                                                 <div className="text-center py-8 text-gray-500">
                                                     <p>No stories available for dashboard display.</p>
+                                                    <p className="text-xs mt-2">
+                                                        Stories: {stories?.length || 0} | 
+                                                        Session: {currentSession ? '✓' : '✗'} |
+                                                        Estimations: {currentSession?.estimations ? '✓' : '✗'}
+                                                    </p>
                                                 </div>
                                             );
                                         }
