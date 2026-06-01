@@ -790,8 +790,32 @@
             };
 
             const handleLogout = () => {
+                // Reset all user-related state to return to login screen
                 setUser(null);
+                setLoginName('');
+                setLoginRole('');
+                setSessionId('');
+                setCurrentSession(null);
+                setShowDashboard(false);
+                setStories([]);
+                setNewStoryNumber('');
+                setNewStorySummary('');
+                setEditingId(null);
+                setEditingNumber('');
+                setEditingSummary('');
+                setShowDevReason(null);
+                setSelectedDevReason('');
+                setShowQaReason(null);
+                setSelectedQaReason('');
+                setTempPoints(null);
+                setShowCreateSessionForm(false);
+                setTeamName('');
+                setSprintValue('');
+                
+                // Clear localStorage
                 localStorage.removeItem('storyPointEstimatorUser');
+                
+                console.log('User logged out successfully - redirected to login screen');
             };
 
             const getRoleColor = (role) => {
