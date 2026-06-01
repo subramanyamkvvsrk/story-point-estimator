@@ -123,6 +123,7 @@
             const [sprintValue, setSprintValue] = useState('');
             const [devOnlyStory, setDevOnlyStory] = useState(false);
             const [qaOnlyStory, setQaOnlyStory] = useState(false);
+            const [hasExplicitlyJoined, setHasExplicitlyJoined] = useState(false);
 
             // Fibonacci sequence for story points (limited to 13)
             const fibonacciPoints = [0, 0.5, 1, 2, 3, 5, 8, 13];
@@ -335,7 +336,7 @@
             // Load session when user or sessionId changes
             useEffect(() => {
                 const loadSessionData = async (retryCount = 0) => {
-                    if (!user || !sessionId) return;
+                    if (!user || !sessionId || !hasExplicitlyJoined) return;
                     
                     try {
                         let session = await getSession(sessionId);
@@ -425,7 +426,7 @@
 
             // Auto-refresh session data every 5 seconds
             useEffect(() => {
-                if (!sessionId || !user) return;
+                if (!sessionId || !user || !hasExplicitlyJoined) return;
 
                 const interval = setInterval(async () => {
                     try {
@@ -811,6 +812,7 @@
                 setShowCreateSessionForm(false);
                 setTeamName('');
                 setSprintValue('');
+                setHasExplicitlyJoined(false);  // Reset explicit join flag
                 
                 // Clear localStorage
                 localStorage.removeItem('storyPointEstimatorUser');
@@ -854,6 +856,7 @@
                 saveSession(newSessionId, newSession);
                 setSessionId(newSessionId);
                 setCurrentSession(newSession);
+                setHasExplicitlyJoined(true);  // Mark as explicitly joined when creating session
                 localStorage.setItem('storyPointEstimatorSessionId', newSessionId);
                 setShowCreateSessionForm(false);
                 setTeamName('');
@@ -888,6 +891,7 @@
                         
                         setSessionId(id);
                         setStories(session.stories || []);
+                        setHasExplicitlyJoined(true);  // Mark as explicitly joined
                         localStorage.setItem('storyPointEstimatorSessionId', id);
                     } else {
                         alert('Session not found!');
