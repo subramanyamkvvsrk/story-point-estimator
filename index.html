@@ -93,6 +93,14 @@
         );
 
         function App() {
+            // ====== FEATURE CONFIGURATION FLAGS ======
+            // Set these to true/false to enable/disable features
+            const FEATURES = {
+                ENHANCED_DASHBOARD_SUMMARY: true,     // Enhanced Dashboard Summary Cards
+                ESTIMATION_PROGRESS_BAR: false,       // Smart Estimation Progress Bar - DISABLED
+            };
+            // =========================================
+            
             const [user, setUser] = useState(null);
             const [loginName, setLoginName] = useState('');
             const [loginRole, setLoginRole] = useState('');
@@ -224,8 +232,10 @@
                         }
                         throw new Error('Failed to create session');
                     } catch (error) {
-                        console.error('Error creating session:', error);
-                        throw error;
+                        console.error('Server unavailable, using localStorage fallback');
+                        // Fallback to localStorage
+                        localStorage.setItem(`session_${sessionId}`, JSON.stringify(sessionData));
+                        return sessionData;
                     }
                 },
 
@@ -243,8 +253,10 @@
                         }
                         throw new Error('Failed to update session');
                     } catch (error) {
-                        console.error('Error updating session:', error);
-                        throw error;
+                        console.error('Server unavailable, using localStorage fallback');
+                        // Fallback to localStorage
+                        localStorage.setItem(`session_${sessionId}`, JSON.stringify(sessionData));
+                        return sessionData;
                     }
                 },
 
@@ -262,8 +274,20 @@
                         }
                         throw new Error('Failed to add participant');
                     } catch (error) {
-                        console.error('Error adding participant:', error);
-                        throw error;
+                        console.error('Server unavailable, using localStorage fallback');
+                        // Fallback to localStorage - add participant to existing session
+                        const existingSession = localStorage.getItem(`session_${sessionId}`);
+                        if (existingSession) {
+                            const session = JSON.parse(existingSession);
+                            if (!session.participants) session.participants = [];
+                            const existingUser = session.participants.find(p => p.name === participant.name && p.role === participant.role);
+                            if (!existingUser) {
+                                session.participants.push({ ...participant, joinedAt: new Date().toISOString() });
+                                localStorage.setItem(`session_${sessionId}`, JSON.stringify(session));
+                            }
+                            return session;
+                        }
+                        return null;
                     }
                 }
             };
@@ -349,9 +373,10 @@
                                 stories: [],
                                 estimations: {},
                                 completedStories: {},
+                                revealedStories: {},
                                 minimumActiveUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-                                teamName: 'Team',
-                                sprintValue: 'Current Sprint',
+                                teamName: teamName.trim() || `${user.name}'s Team`,
+                                sprintValue: sprintValue.trim() || 'Planning Session',
                                 status: 'active'
                             };
                             await api.createSession(sessionId, newSession);
@@ -540,6 +565,34 @@
                 }
             };
 
+            const revealStoryEstimates = (storyId) => {
+                if (user.role !== 'PO') {
+                    alert('Only Product Owners can reveal estimates.');
+                    return;
+                }
+                
+                if (currentSession) {
+                    const updatedRevealedStories = {
+                        ...currentSession.revealedStories,
+                        [storyId]: {
+                            revealedBy: user.name,
+                            revealedAt: new Date().toISOString()
+                        }
+                    };
+                    
+                    const updatedSession = {
+                        ...currentSession,
+                        revealedStories: updatedRevealedStories
+                    };
+                    setCurrentSession(updatedSession);
+                    saveSession(sessionId, updatedSession);
+                }
+            };
+
+            const isStoryRevealed = (storyId) => {
+                return currentSession?.revealedStories?.[storyId] || false;
+            };
+
             const getStoryEstimationSummary = (storyId) => {
                 if (!currentSession) return { estimated: [], notEstimated: [] };
                 
@@ -621,7 +674,7 @@
 
                 // Prepare data for CSV
                 const csvData = [];
-                csvData.push(['Story Number', 'Story Summary', 'Developer Average', 'QA Average', 'Overall Average', 'Total Estimations']);
+                csvData.push(['Story Number', 'JIRA Link', 'Story Summary', 'Restrictions', 'Developer Average', 'QA Average', 'Overall Average', 'Total Estimations']);
 
                 stories.forEach(story => {
                     const devAverage = getRoleSpecificAverage(story.id, 'Dev');
@@ -631,9 +684,25 @@
                     const storyEstimations = currentSession.estimations[story.id] || {};
                     const totalEstimations = Object.keys(storyEstimations).length;
                     
+                    // Get restriction information
+                    let restrictions = '';
+                    if (story.restrictions?.devOnly) {
+                        restrictions = 'Dev Only';
+                    } else if (story.restrictions?.qaOnly) {
+                        restrictions = 'QA Only';
+                    } else {
+                        restrictions = 'All Roles';
+                    }
+                    
+                    // Separate story number and JIRA link into different columns
+                    const storyNumber = story.number || 'N/A';
+                    const jiraLink = story.numberUrl || '';
+                    
                     csvData.push([
-                        story.number || 'N/A',
+                        storyNumber,
+                        jiraLink,
                         story.summary || story.title || 'No summary',
+                        restrictions,
                         devAverage > 0 ? devAverage : 'N/A',
                         qaAverage > 0 ? qaAverage : 'N/A', 
                         overallAverage > 0 ? overallAverage : 'N/A',
@@ -661,12 +730,12 @@
                     const url = URL.createObjectURL(blob);
                     link.setAttribute('href', url);
                     
-                    // Create filename with team name and sprint
+                    // Create filename with team name, sprint, refinement, and date
                     const teamPart = currentSession.teamName ? `${currentSession.teamName}_` : '';
                     const sprintPart = currentSession.sprintValue ? `${currentSession.sprintValue}_` : '';
                     const datePart = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                     
-                    link.setAttribute('download', `${teamPart}${sprintPart}Estimation_Summary_${datePart}.csv`);
+                    link.setAttribute('download', `${teamPart}${sprintPart}Refinement_${datePart}.csv`);
                     link.style.visibility = 'hidden';
                     document.body.appendChild(link);
                     link.click();
@@ -749,6 +818,7 @@
                     stories: [],
                     estimations: {},
                     completedStories: {},
+                    revealedStories: {},
                     createdBy: user.name,
                     createdAt: createdAt,
                     minimumActiveUntil: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
@@ -894,19 +964,29 @@
                         .map(p => `${p.name}_${p.role}`)
                         .filter(userId => !estimatedBy.includes(userId));
                     
+                    // For non-PO users, hide estimation details until revealed
+                    const isRevealed = isStoryRevealed(story.id);
+                    const shouldShowDetails = user.role === 'PO' || isRevealed;
+                    
                     return {
                         story,
                         estimatedBy: estimatedBy.map(userId => {
                             const [name, role] = userId.split('_');
                             const estimation = storyEstimations[userId];
                             const points = typeof estimation === 'object' ? estimation.points : estimation;
-                            return { userId, name, role, points: points };
+                            return { 
+                                userId, 
+                                name, 
+                                role, 
+                                points: shouldShowDetails ? points : '***' 
+                            };
                         }),
                         notEstimatedBy: notEstimatedBy.map(userId => {
                             const [name, role] = userId.split('_');
                             return { userId, name, role };
                         }),
-                        isComplete: notEstimatedBy.length === 0
+                        isComplete: (currentSession.completedStories && currentSession.completedStories[story.id]) || notEstimatedBy.length === 0,
+                        isRevealed: isRevealed
                     };
                 });
             };
@@ -1138,23 +1218,19 @@
                     <div className="max-w-4xl mx-auto">
                         {/* Header */}
                         <div className="flex justify-between items-start mb-8">
-                            <div className="text-center flex-1">
-                                <div className="flex items-center justify-center gap-3 mb-4">
-                                    <TargetIcon />
+                            <div className="text-left flex-1">
+                                <div className="flex items-center justify-start mb-4">
                                     <div>
-                                        <h1 className="text-2xl font-bold text-gray-900">
+                                        <h1 className="text-lg font-semibold text-gray-900">
                                             Story Point Estimator
-                                            <span className="text-sm font-normal text-green-600 ml-2">
-                                                🚀 Server-Based (Team Sync)
-                                            </span>
                                             {currentSession && currentSession.teamName && (
-                                                <span className="text-xl text-primary-600 ml-3">
+                                                <span className="text-base text-primary-600 ml-3">
                                                     - {currentSession.teamName}
                                                 </span>
                                             )}
                                         </h1>
                                         {currentSession && currentSession.sprintValue && (
-                                            <div className="mt-1">
+                                            <div className="mt-2">
                                                 <span className="bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm font-medium">
                                                     {currentSession.sprintValue}
                                                 </span>
@@ -1271,39 +1347,78 @@
                             <div className="bg-white p-6 rounded-lg shadow-sm border mb-8">
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-lg font-semibold text-gray-900">Estimation Dashboard</h2>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => console.log('DEBUG:', { stories, currentSession, estimations: currentSession?.estimations })}
-                                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
-                                            title="Debug dashboard data"
-                                        >
-                                            Debug
-                                        </button>
-                                        <button
-                                            onClick={downloadEstimationSummary}
-                                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium flex items-center gap-2"
-                                            title="Download estimation summary as Excel file"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                            Download Summary
-                                        </button>
-                                    </div>
+                                    <button
+                                        onClick={downloadEstimationSummary}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium flex items-center gap-2"
+                                        title="Download estimation summary with role restrictions as CSV file"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Export CSV
+                                    </button>
                                 </div>
+
+                                {/* Enhanced Dashboard Summary Cards - Feature Toggle */}
+                                {FEATURES.ENHANCED_DASHBOARD_SUMMARY && (
+                                    <div className="grid grid-cols-4 gap-4 mb-6">
+                                        {/* Team Members Card */}
+                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                            <div className="flex items-center gap-2">
+                                                <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m3 4.197a4 4 0 11-6.064-3.113A5.002 5.002 0 0021 4.354a4 4 0 01-6 3.346z" />
+                                                </svg>
+                                                <div className="text-sm font-medium text-blue-600">Team Members</div>
+                                                <div className="text-lg font-bold text-blue-800 ml-auto">
+                                                    {currentSession?.participants?.length || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Total Stories Card */}
+                                        <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                            <div className="flex items-center gap-2">
+                                                <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <div className="text-sm font-medium text-purple-600">Total Stories</div>
+                                                <div className="text-lg font-bold text-purple-800 ml-auto">
+                                                    {stories?.length || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Completed Stories Card */}
+                                        <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                            <div className="flex items-center gap-2">
+                                                <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <div className="text-sm font-medium text-green-600">Completed</div>
+                                                <div className="text-lg font-bold text-green-800 ml-auto">
+                                                    {stories?.filter(story => currentSession?.completedStories?.[story.id])?.length || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Active Stories Card */}
+                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                            <div className="flex items-center gap-2">
+                                                <svg className="h-4 w-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <div className="text-sm font-medium text-orange-600">Active</div>
+                                                <div className="text-lg font-bold text-orange-800 ml-auto">
+                                                    {stories?.filter(story => !currentSession?.completedStories?.[story.id])?.length || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 
                                 {(() => {
                                     try {
                                         const estimationStatus = getEstimationStatus();
-                                        
-                                        // Debug info
-                                        console.log('Dashboard Debug:', {
-                                            stories: stories,
-                                            storiesLength: stories?.length,
-                                            currentSession: currentSession,
-                                            estimations: currentSession?.estimations,
-                                            estimationStatus: estimationStatus
-                                        });
                                         
                                         if (!Array.isArray(estimationStatus) || estimationStatus.length === 0) {
                                             return (
@@ -1318,79 +1433,189 @@
                                             );
                                         }
 
-                                        return estimationStatus.map(storyStatus => (
+                                        return estimationStatus
+                                            .sort((a, b) => {
+                                                // Sort by story number/id in descending order (latest first)
+                                                const aNum = parseInt(a.story.number) || 0;
+                                                const bNum = parseInt(b.story.number) || 0;
+                                                if (aNum && bNum) return bNum - aNum;
+                                                
+                                                // Fallback to ID-based sorting (descending - latest first)
+                                                const aId = String(a.story.id || '');
+                                                const bId = String(b.story.id || '');
+                                                return bId.localeCompare(aId);
+                                            })
+                                            .map(storyStatus => (
                                             <div key={storyStatus.story.id} className="border-b border-gray-200 pb-4 mb-4 last:border-b-0 last:mb-0">
                                                 <div className="flex items-center gap-3 mb-3">
-                                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
-                                                        {storyStatus.story.number || 'N/A'}
-                                                    </span>
-                                                    <h3 className="font-medium text-gray-900 flex-1">{storyStatus.story.summary || storyStatus.story.title || 'No Title'}</h3>
-                                                    {storyStatus.isComplete && (
-                                                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
-                                                            Complete
+                                                    {storyStatus.story.numberUrl ? (
+                                                        <a
+                                                            href={storyStatus.story.numberUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium hover:bg-blue-200 transition-colors inline-flex items-center gap-1"
+                                                            title={`Open ${storyStatus.story.numberUrl}`}
+                                                        >
+                                                            {storyStatus.story.number || 'N/A'}
+                                                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                            </svg>
+                                                        </a>
+                                                    ) : (
+                                                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+                                                            {storyStatus.story.number || 'N/A'}
                                                         </span>
                                                     )}
+                                                    <h3 className="font-medium text-gray-900 flex-1">{storyStatus.story.summary || storyStatus.story.title || 'No Title'}</h3>
+                                                    <div className="flex items-center gap-2">
+                                                        {/* Restriction Tags */}
+                                                        {storyStatus.story.restrictions?.devOnly && (
+                                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                                                👨‍💻 Dev Only
+                                                            </span>
+                                                        )}
+                                                        {storyStatus.story.restrictions?.qaOnly && (
+                                                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                                                                🧪 QA Only
+                                                            </span>
+                                                        )}
+                                                        
+                                                        {/* Complete Status - Show for all tickets */}
+                                                        {storyStatus.isComplete ? (
+                                                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                                                                ✅ Complete
+                                                            </span>
+                                                        ) : (
+                                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium">
+                                                                ⏳ In Progress
+                                                            </span>
+                                                        )}
+                                                        
+                                                        {/* Hidden/Revealed Status */}
+                                                        {!storyStatus.isRevealed && user.role !== 'PO' && (
+                                                            <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
+                                                                🔒 Hidden
+                                                            </span>
+                                                        )}
+                                                        {storyStatus.isRevealed && user.role !== 'PO' && (
+                                                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                                                👁️ Revealed
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
+
+                                                {/* Smart Estimation Progress Bar - Feature Toggle */}
+                                                {FEATURES.ESTIMATION_PROGRESS_BAR && (() => {
+                                                    // Calculate progress for this story
+                                                    const totalParticipants = currentSession?.participants?.length || 0;
+                                                    const estimatedCount = storyStatus.estimatedBy?.length || 0;
+                                                    const progressPercentage = totalParticipants > 0 ? (estimatedCount / totalParticipants) * 100 : 0;
+                                                    
+                                                    // Get eligible participants (considering restrictions)
+                                                    let eligibleParticipants = currentSession?.participants || [];
+                                                    if (storyStatus.story.restrictions?.devOnly) {
+                                                        eligibleParticipants = eligibleParticipants.filter(p => p.role === 'Dev');
+                                                    } else if (storyStatus.story.restrictions?.qaOnly) {
+                                                        eligibleParticipants = eligibleParticipants.filter(p => p.role === 'QA');
+                                                    }
+                                                    
+                                                    const eligibleCount = eligibleParticipants.length;
+                                                    const adjustedProgressPercentage = eligibleCount > 0 ? (estimatedCount / eligibleCount) * 100 : 0;
+                                                    
+                                                    return (
+                                                        <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <span className="text-sm font-medium text-gray-700">
+                                                                    Estimation Progress: {estimatedCount}/{eligibleCount} participants
+                                                                </span>
+                                                                <span className="text-xs text-gray-500">
+                                                                    {Math.round(adjustedProgressPercentage)}%
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            {/* Progress Bar */}
+                                                            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+                                                                <div 
+                                                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                                                        adjustedProgressPercentage === 100 ? 'bg-green-500' : 
+                                                                        adjustedProgressPercentage >= 50 ? 'bg-blue-500' : 'bg-orange-400'
+                                                                    }`}
+                                                                    style={{ width: `${Math.min(adjustedProgressPercentage, 100)}%` }}
+                                                                ></div>
+                                                            </div>
+                                                            
+                                                            {/* Participant Status Icons */}
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {eligibleParticipants.map(participant => {
+                                                                    const hasEstimated = storyStatus.estimatedBy?.some(est => 
+                                                                        est.name === participant.name && est.role === participant.role
+                                                                    );
+                                                                    return (
+                                                                        <div 
+                                                                            key={`${participant.name}_${participant.role}`}
+                                                                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                                                                hasEstimated 
+                                                                                    ? 'bg-green-100 text-green-800' 
+                                                                                    : 'bg-gray-100 text-gray-600'
+                                                                            }`}
+                                                                            title={hasEstimated ? 'Estimated' : 'Pending estimation'}
+                                                                        >
+                                                                            <span className={`w-2 h-2 rounded-full ${
+                                                                                hasEstimated ? 'bg-green-500' : 'bg-gray-400'
+                                                                            }`}></span>
+                                                                            {participant.name} ({participant.role})
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-700 mb-2">Estimated by:</p>
-                                                        <div className="space-y-1">
+                                                <div className="grid grid-cols-2 gap-6">
+                                                    {/* Estimated Users - Left Column */}
+                                                    <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500">
+                                                        <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                                            Estimated ({storyStatus.estimatedBy?.length || 0})
+                                                        </h4>
+                                                        <div className="grid grid-cols-2 gap-2">
                                                             {storyStatus.estimatedBy && storyStatus.estimatedBy.length > 0 ? (
                                                                 storyStatus.estimatedBy.map(est => (
-                                                                    <div key={est.userId} className="flex items-center gap-2">
-                                                                        <span className={`px-2 py-1 rounded text-xs ${getRoleColor(est.role)}`}>
-                                                                            {est.name} ({est.role})
-                                                                        </span>
-                                                                        <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">
-                                                                            {est.points}
-                                                                        </span>
+                                                                    <div key={est.userId} className="flex justify-between items-center bg-white px-3 py-1 rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
+                                                                        <span className="text-sm text-gray-700">{est.name} ({est.role})</span>
+                                                                        <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">{est.points}</span>
                                                                     </div>
                                                                 ))
                                                             ) : (
-                                                                <p className="text-xs text-gray-500">No estimates yet</p>
+                                                                <div className="col-span-2 text-sm text-gray-500 italic bg-white p-3 rounded-md border border-gray-200">No estimates yet</div>
                                                             )}
                                                         </div>
                                                     </div>
                                                     
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-700 mb-2">Pending estimation:</p>
-                                                        <div className="space-y-1">
-                                                            {storyStatus.notEstimatedBy && storyStatus.notEstimatedBy.length > 0 ? (
-                                                                storyStatus.notEstimatedBy.map(pending => (
-                                                                    <div key={pending.userId} className="flex items-center gap-2">
-                                                                        <span className={`px-2 py-1 rounded text-xs ${getRoleColor(pending.role)} opacity-50`}>
-                                                                            {pending.name} ({pending.role})
-                                                                        </span>
-                                                                        <span className="text-xs text-gray-500">Waiting...</span>
-                                                                    </div>
-                                                                ))
-                                                            ) : (
-                                                                <p className="text-xs text-green-600">All estimated!</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-700 mb-2">Averages:</p>
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-xs text-blue-600">Dev:</span>
-                                                                <span className="bg-blue-100 px-2 py-1 rounded text-xs font-mono">
-                                                                    {getRoleSpecificAverage(storyStatus.story.id, 'Dev') || 'N/A'}
-                                                                </span>
+                                                    {/* Averages - Right Column */}
+                                                    <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-purple-500">
+                                                        <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                                            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                                            Averages
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {/* Dev & QA side by side */}
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div className="flex justify-between items-center bg-white px-3 py-1 rounded-md border border-gray-200">
+                                                                    <span className="text-sm text-gray-700">Dev</span>
+                                                                    <span className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold">{getRoleSpecificAverage(storyStatus.story.id, 'Dev') || '-'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center bg-white px-3 py-1 rounded-md border border-gray-200">
+                                                                    <span className="text-sm text-gray-700">QA</span>
+                                                                    <span className="bg-green-500 text-white px-2 py-1 rounded text-xs font-bold">{getRoleSpecificAverage(storyStatus.story.id, 'QA') || '-'}</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-xs text-green-600">QA:</span>
-                                                                <span className="bg-green-100 px-2 py-1 rounded text-xs font-mono">
-                                                                    {getRoleSpecificAverage(storyStatus.story.id, 'QA') || 'N/A'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-xs text-gray-600">Overall:</span>
-                                                                <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono font-bold">
-                                                                    {getStoryAverageEstimation(storyStatus.story.id) || 'N/A'}
-                                                                </span>
+                                                            {/* Overall full width */}
+                                                            <div className="flex justify-between items-center bg-white px-3 py-1 rounded-md border border-gray-200">
+                                                                <span className="text-sm text-gray-700">Overall</span>
+                                                                <span className="bg-purple-500 text-white px-2 py-1 rounded text-xs font-bold">{getStoryAverageEstimation(storyStatus.story.id) || '-'}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1415,112 +1640,97 @@
                             </div>
                         )}
 
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                            <div className="bg-white p-6 rounded-lg shadow-sm border">
-                                <div className="flex items-center gap-3">
-                                    <BarChartIcon />
-                                    <div>
-                                        <p className="text-sm text-gray-600">Total Points</p>
-                                        <p className="text-2xl font-bold text-blue-600">{totalPoints}</p>
-                                    </div>
+                        {/* Summary Cards - Compact */}
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className="bg-white p-3 rounded border">
+                                <div className="flex items-center gap-2">
+                                    <BarChartIcon className="h-4 w-4 text-blue-600" />
+                                    <span className="text-sm font-medium text-blue-600">Points</span>
+                                    <span className="text-lg font-bold text-blue-600 ml-auto">{totalPoints}</span>
                                 </div>
                             </div>
                             
-                            <div className="bg-white p-6 rounded-lg shadow-sm border">
-                                <div className="flex items-center gap-3">
-                                    <TargetIcon />
-                                    <div>
-                                        <p className="text-sm text-gray-600">Estimated Stories</p>
-                                        <p className="text-2xl font-bold text-green-600">{estimatedStories}</p>
-                                    </div>
+                            <div className="bg-white p-3 rounded border">
+                                <div className="flex items-center gap-2">
+                                    <TargetIcon className="h-4 w-4 text-green-600" />
+                                    <span className="text-sm font-medium text-green-600">Estimated</span>
+                                    <span className="text-lg font-bold text-green-600 ml-auto">{estimatedStories}</span>
                                 </div>
                             </div>
                             
-                            <div className="bg-white p-6 rounded-lg shadow-sm border">
-                                <div className="flex items-center gap-3">
-                                    <EditIcon />
-                                    <div>
-                                        <p className="text-sm text-gray-600">Total Stories</p>
-                                        <p className="text-2xl font-bold text-purple-600">{stories.length}</p>
-                                    </div>
+                            <div className="bg-white p-3 rounded border">
+                                <div className="flex items-center gap-2">
+                                    <EditIcon className="h-4 w-4 text-purple-600" />
+                                    <span className="text-sm font-medium text-purple-600">Stories</span>
+                                    <span className="text-lg font-bold text-purple-600 ml-auto">{stories.length}</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Add New Story */}
-                        <div className="bg-white p-6 rounded-lg shadow-sm border mb-8">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Add New Story</h2>
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                    <input
-                                        type="text"
-                                        value={newStoryNumber}
-                                        onChange={(e) => setNewStoryNumber(e.target.value)}
-                                        placeholder="Story number or URL (e.g., VPIE-40444 or https://jira.carelonrx.com/browse/VPIE-40444)"
-                                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                        onKeyPress={(e) => e.key === 'Enter' && addStory()}
-                                    />
-                                    <input
-                                        type="text"
-                                        value={newStorySummary}
-                                        onChange={(e) => setNewStorySummary(e.target.value)}
-                                        placeholder="Story summary..."
-                                        className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                                        onKeyPress={(e) => e.key === 'Enter' && addStory()}
-                                    />
-                                    <button
-                                        onClick={addStory}
-                                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 flex items-center justify-center gap-2"
-                                    >
-                                        <PlusIcon />
-                                        Add Story
-                                    </button>
-                                </div>
-                                
-                                {/* PO-only role restriction toggles */}
-                                {user.role === 'PO' && (
-                                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                        <p className="text-sm font-medium text-purple-900 mb-3">Estimation Restrictions (Optional)</p>
-                                        <div className="flex gap-6">
-                                            <label className="flex items-center cursor-pointer">
-                                                <div className="relative">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={devOnlyStory}
-                                                        onChange={(e) => {
-                                                            setDevOnlyStory(e.target.checked);
-                                                            if (e.target.checked) setQaOnlyStory(false);
-                                                        }}
-                                                        className="sr-only"
-                                                    />
-                                                    <div className={`w-8 h-4 rounded-full ${devOnlyStory ? 'bg-blue-500' : 'bg-gray-300'} transition-colors duration-200`}>
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow transform transition-transform duration-200 mt-0.5 ${devOnlyStory ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
-                                                    </div>
-                                                </div>
-                                                <span className="ml-3 text-sm font-medium text-purple-700">Dev Only</span>
-                                            </label>
-                                            <label className="flex items-center cursor-pointer">
-                                                <div className="relative">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={qaOnlyStory}
-                                                        onChange={(e) => {
-                                                            setQaOnlyStory(e.target.checked);
-                                                            if (e.target.checked) setDevOnlyStory(false);
-                                                        }}
-                                                        className="sr-only"
-                                                    />
-                                                    <div className={`w-8 h-4 rounded-full ${qaOnlyStory ? 'bg-green-500' : 'bg-gray-300'} transition-colors duration-200`}>
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow transform transition-transform duration-200 mt-0.5 ${qaOnlyStory ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
-                                                    </div>
-                                                </div>
-                                                <span className="ml-3 text-sm font-medium text-purple-700">QA Only</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
+                        {/* Add Story - Compact */}
+                        <div className="bg-white p-3 rounded border mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                <input
+                                    type="text"
+                                    value={newStoryNumber}
+                                    onChange={(e) => setNewStoryNumber(e.target.value)}
+                                    placeholder="Story ID/URL"
+                                    className="px-2 py-1 border border-gray-400 rounded text-sm text-gray-900 placeholder-gray-700 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                                    onKeyPress={(e) => e.key === 'Enter' && addStory()}
+                                />
+                                <input
+                                    type="text"
+                                    value={newStorySummary}
+                                    onChange={(e) => setNewStorySummary(e.target.value)}
+                                    placeholder="Story summary"
+                                    className="md:col-span-2 px-2 py-1 border border-gray-400 rounded text-sm text-gray-900 placeholder-gray-700 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                                    onKeyPress={(e) => e.key === 'Enter' && addStory()}
+                                />
+                                <button
+                                    onClick={addStory}
+                                    className="px-2 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700 flex items-center justify-center gap-1"
+                                >
+                                    <PlusIcon className="h-3 w-3" />
+                                    Add
+                                </button>
                             </div>
+                            {/* Role Restrictions - Toggle Switches */}
+                            {user.role === 'PO' && (
+                                <div className="mt-2 flex items-center gap-4 text-xs">
+                                    <label className="flex items-center cursor-pointer group">
+                                        <div className="relative">
+                                            <input
+                                                type="checkbox"
+                                                checked={devOnlyStory}
+                                                onChange={(e) => {
+                                                    setDevOnlyStory(e.target.checked);
+                                                    if (e.target.checked) setQaOnlyStory(false);
+                                                }}
+                                                className="sr-only"
+                                            />
+                                            <div className={`block w-8 h-4 rounded-full transition-colors duration-200 ${devOnlyStory ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+                                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-200 ${devOnlyStory ? 'transform translate-x-4' : ''}`}></div>
+                                        </div>
+                                        <span className={`ml-2 transition-colors duration-200 ${devOnlyStory ? 'text-blue-700 font-medium' : 'text-gray-600'}`}>Dev Only</span>
+                                    </label>
+                                    <label className="flex items-center cursor-pointer group">
+                                        <div className="relative">
+                                            <input
+                                                type="checkbox"
+                                                checked={qaOnlyStory}
+                                                onChange={(e) => {
+                                                    setQaOnlyStory(e.target.checked);
+                                                    if (e.target.checked) setDevOnlyStory(false);
+                                                }}
+                                                className="sr-only"
+                                            />
+                                            <div className={`block w-8 h-4 rounded-full transition-colors duration-200 ${qaOnlyStory ? 'bg-green-600' : 'bg-gray-300'}`}></div>
+                                            <div className={`dot absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-200 ${qaOnlyStory ? 'transform translate-x-4' : ''}`}></div>
+                                        </div>
+                                        <span className={`ml-2 transition-colors duration-200 ${qaOnlyStory ? 'text-green-700 font-medium' : 'text-gray-600'}`}>QA Only</span>
+                                    </label>
+                                </div>
+                            )}
                         </div>
 
                         {/* Stories List */}
@@ -1545,7 +1755,7 @@
                                                                 value={editingNumber}
                                                                 onChange={(e) => setEditingNumber(e.target.value)}
                                                                 placeholder="Story number or URL"
-                                                                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                                                className="px-3 py-2 border border-gray-400 rounded-md text-gray-900 placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                                                 onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
                                                                 autoFocus
                                                             />
@@ -1554,7 +1764,7 @@
                                                                 value={editingSummary}
                                                                 onChange={(e) => setEditingSummary(e.target.value)}
                                                                 placeholder="Story summary"
-                                                                className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                                                className="md:col-span-2 px-3 py-2 border border-gray-400 rounded-md text-gray-900 placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                                                 onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
                                                             />
                                                         </div>
@@ -1610,88 +1820,109 @@
                                                                         🧪 QA Only
                                                                     </span>
                                                                 )}
-                                                                <button
-                                                                    onClick={() => startEditing(story)}
-                                                                    className="p-1 text-gray-400 hover:text-gray-600"
-                                                                >
-                                                                    <EditIcon />
-                                                                </button>
+                                                                {user.role === 'PO' && (
+                                                                    <button
+                                                                        onClick={() => startEditing(story)}
+                                                                        className="p-1 text-gray-400 hover:text-gray-600"
+                                                                    >
+                                                                        <EditIcon />
+                                                                    </button>
+                                                                )}
                                                             </div>
-                                                            <h3 className="text-lg font-medium text-gray-900">
-                                                                {story.summary || story.title || 'No summary'}
-                                                            </h3>
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <h3 className="text-lg font-medium text-gray-900 flex-1">
+                                                                    {story.summary || story.title || 'No summary'}
+                                                                </h3>
+                                                                {user.role === 'PO' && !isStoryRevealed(story.id) && currentSession?.estimations?.[story.id] && Object.keys(currentSession.estimations[story.id]).length > 0 && (
+                                                                    <button
+                                                                        onClick={() => revealStoryEstimates(story.id)}
+                                                                        className="px-3 py-1 bg-yellow-500 text-white text-sm rounded hover:bg-yellow-600 flex items-center gap-1"
+                                                                        title="Reveal team estimates to all members"
+                                                                    >
+                                                                        👁️ Reveal Estimates
+                                                                    </button>
+                                                                )}
+                                                                {isStoryRevealed(story.id) && (
+                                                                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
+                                                                        ✓ Estimates Revealed
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
                                             
-                                            <button
-                                                onClick={() => removeStory(story.id)}
-                                                className="p-2 text-red-400 hover:text-red-600"
-                                            >
-                                                <TrashIcon />
-                                            </button>
+                                            {user.role === 'PO' && (
+                                                <button
+                                                    onClick={() => removeStory(story.id)}
+                                                    className="p-2 text-red-400 hover:text-red-600"
+                                                >
+                                                    <TrashIcon />
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {/* Team Estimations Display (for PO) */}
-                                        {user.role === 'PO' && currentSession && (
-                                            <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                                <h4 className="font-medium text-purple-900 mb-3">Team Estimations</h4>
+                                        {/* PO Status - Compact */}
+                                        {user && user.role === 'PO' && currentSession && (
+                                            <div className="mt-2 p-2 bg-purple-50 rounded text-xs">
+                                                {(() => {
+                                                    const summary = getStoryEstimationSummary(story.id);
+                                                    if (summary.estimated.length === 0 && summary.notEstimated.length === 0) return null;
+                                                    
+                                                    return (
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                {summary.estimated.length > 0 && (
+                                                                    <span className="text-green-700">
+                                                                        ✅ {summary.estimated.length} estimated
+                                                                    </span>
+                                                                )}
+                                                                {summary.notEstimated.length > 0 && (
+                                                                    <span className="text-orange-700">
+                                                                        ⏳ {summary.notEstimated.length} waiting
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {!isStoryRevealed(story.id) && (
+                                                                <span className="text-purple-600">🔒 Hidden</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        {/* Revealed Team Estimations Display (for all non-PO users) */}
+                                        {user.role !== 'PO' && currentSession && isStoryRevealed(story.id) && (
+                                            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                                                <h5 className="text-xs font-medium text-blue-900 mb-2">
+                                                    👁️ Revealed by {currentSession.revealedStories[story.id]?.revealedBy}
+                                                </h5>
                                                 {(() => {
                                                     const summary = getStoryEstimationSummary(story.id);
                                                     return (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div>
-                                                                <p className="text-sm font-medium text-purple-700 mb-2">
-                                                                    Provided ({summary.estimated.length})
-                                                                </p>
-                                                                <div className="space-y-2">
-                                                                    {summary.estimated.map(est => (
-                                                                        <div key={est.userId} className="bg-white p-3 rounded border">
-                                                                            <div className="flex items-center justify-between mb-1">
-                                                                                <span className={`px-2 py-1 rounded text-xs ${getRoleColor(est.role)}`}>
-                                                                                    {est.name} ({est.role})
-                                                                                </span>
-                                                                                <span className="bg-purple-200 px-3 py-1 rounded font-bold text-purple-800">
-                                                                                    {est.points}
-                                                                                </span>
-                                                                            </div>
-                                                                            {est.devReason && est.role === 'Dev' && (
-                                                                                <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1">
-                                                                                    💡 {est.devReason}
-                                                                                </p>
-                                                                            )}
-                                                                            {est.qaReason && est.role === 'QA' && (
-                                                                                <p className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded mt-1">
-                                                                                    🧪 {est.qaReason}
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                    {summary.estimated.length === 0 && (
-                                                                        <p className="text-sm text-gray-500 italic">No team estimations yet</p>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            <div>
-                                                                <p className="text-sm font-medium text-purple-700 mb-2">
-                                                                    Waiting ({summary.notEstimated.length})
-                                                                </p>
-                                                                <div className="space-y-1">
-                                                                    {summary.notEstimated.map(pending => (
-                                                                        <div key={pending.userId} className="bg-gray-100 p-2 rounded border-dashed border">
-                                                                            <span className={`px-2 py-1 rounded text-xs ${getRoleColor(pending.role)} opacity-60`}>
-                                                                                {pending.name} ({pending.role})
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {summary.estimated.map(est => (
+                                                                <div key={est.userId} className="bg-white px-2 py-1 rounded border text-xs flex items-center gap-1">
+                                                                    <span className={`px-1 rounded text-xs ${getRoleColor(est.role)}`}>
+                                                                        {est.name}
+                                                                    </span>
+                                                                    <span className="bg-blue-200 px-1 rounded font-bold text-blue-800">
+                                                                        {est.points}
+                                                                        {est.devReason && (
+                                                                            <span className="ml-1 text-blue-700 font-normal text-xs">
+                                                                                - {est.devReason}
                                                                             </span>
-                                                                            <span className="text-xs text-gray-500 ml-2">Pending...</span>
-                                                                        </div>
-                                                                    ))}
-                                                                    {summary.notEstimated.length === 0 && (
-                                                                        <p className="text-sm text-green-600 font-medium">✓ All team members estimated!</p>
-                                                                    )}
+                                                                        )}
+                                                                        {est.qaReason && (
+                                                                            <span className="ml-1 text-green-700 font-normal text-xs">
+                                                                                - {est.qaReason}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
                                                                 </div>
-                                                            </div>
+                                                            ))}
                                                         </div>
                                                     );
                                                 })()}
@@ -1699,8 +1930,8 @@
                                         )}
 
                                         {/* Point Selection */}
-                                        <div className="mt-4">
-                                            <p className="text-sm text-gray-600 mb-3">Story Points:</p>
+                                        <div className="mt-4 flex items-center gap-3 flex-wrap">
+                                            <p className="text-sm text-gray-600">Story Points:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {fibonacciPoints.map((point) => (
                                                     <button
@@ -1815,8 +2046,8 @@
                                             )}
                                         </div>
 
-                                        {/* Estimation Summary */}
-                                        {currentSession && (
+                                        {/* Estimation Summary - Only show if revealed or user is PO */}
+                                        {currentSession && (user.role === 'PO' || isStoryRevealed(story.id)) && (
                                             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                                                 <h4 className="font-medium text-gray-900 mb-3">Estimation Summary</h4>
                                                 {(() => {
@@ -1836,18 +2067,18 @@
                                                                                 </span>
                                                                                 <span className="bg-gray-200 px-2 py-1 rounded text-xs font-mono">
                                                                                     {est.points}
+                                                                                    {est.devReason && est.role === 'Dev' && (
+                                                                                        <span className="ml-2 text-blue-600 font-normal">
+                                                                                            - {est.devReason}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {est.qaReason && est.role === 'QA' && (
+                                                                                        <span className="ml-2 text-green-600 font-normal">
+                                                                                            - {est.qaReason}
+                                                                                        </span>
+                                                                                    )}
                                                                                 </span>
                                                                             </div>
-                                                                            {est.devReason && est.role === 'Dev' && (
-                                                                                <div className="ml-4 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                                                                    💡 {est.devReason}
-                                                                                </div>
-                                                                            )}
-                                                                            {est.qaReason && est.role === 'QA' && (
-                                                                                <div className="ml-4 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                                                                                    🧪 {est.qaReason}
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                     ))}
                                                                     {summary.estimated.length === 0 && (
@@ -1878,32 +2109,23 @@
                                                     );
                                                 })()}
 
-                                                {/* PO Completion Controls */}
+                                                {/* PO Controls - Compact */}
                                                 {user.role === 'PO' && (
-                                                    <div className="mt-4 pt-4 border-t border-gray-200">
-                                                        <p className="text-sm font-medium text-gray-700 mb-2">Product Owner Actions</p>
-                                                        <div className="flex gap-2">
-                                                            {currentSession.completedStories && currentSession.completedStories[story.id] ? (
-                                                                <button
-                                                                    onClick={() => markStoryIncomplete(story.id)}
-                                                                    className="px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 text-sm"
-                                                                >
-                                                                    Mark as Incomplete
-                                                                </button>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => markStoryComplete(story.id)}
-                                                                    className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
-                                                                >
-                                                                    Mark as Complete
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        {currentSession.completedStories && currentSession.completedStories[story.id] && (
-                                                            <p className="text-xs text-gray-500 mt-1">
-                                                                Completed by {currentSession.completedStories[story.id].completedBy} on{' '}
-                                                                {new Date(currentSession.completedStories[story.id].completedAt).toLocaleString()}
-                                                            </p>
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        {currentSession.completedStories && currentSession.completedStories[story.id] ? (
+                                                            <button
+                                                                onClick={() => markStoryIncomplete(story.id)}
+                                                                className="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700"
+                                                            >
+                                                                Reopen
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => markStoryComplete(story.id)}
+                                                                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                                            >
+                                                                Complete
+                                                            </button>
                                                         )}
                                                     </div>
                                                 )}
@@ -1912,66 +2134,62 @@
                                     </div>
                                     ))}
 
-                                    {/* Completed Stories (collapsed view) */}
+                                    {/* Completed Stories - Compact */}
                                     {stories.filter(story => currentSession && currentSession.completedStories && currentSession.completedStories[story.id]).length > 0 && (
-                                        <div className="mt-8">
-                                            <h3 className="text-lg font-medium text-gray-900 mb-4">Completed Stories</h3>
-                                            <div className="space-y-3">
-                                                {stories.filter(story => currentSession && currentSession.completedStories && currentSession.completedStories[story.id]).map((story) => {
+                                        <div className="mt-4">
+                                            <h4 className="text-sm font-medium text-gray-700 mb-2">✅ Completed ({stories.filter(story => currentSession && currentSession.completedStories && currentSession.completedStories[story.id]).length})</h4>
+                                            <div className="space-y-1">
+                                                {stories
+                                                    .filter(story => currentSession && currentSession.completedStories && currentSession.completedStories[story.id])
+                                                    .sort((a, b) => {
+                                                        // Sort by story number in descending order (latest first)
+                                                        const aNum = parseInt(a.number) || 0;
+                                                        const bNum = parseInt(b.number) || 0;
+                                                        if (aNum && bNum) return bNum - aNum;
+                                                        
+                                                        // Fallback to ID-based sorting (descending - latest first)
+                                                        const aId = String(a.id || '');
+                                                        const bId = String(b.id || '');
+                                                        return bId.localeCompare(aId);
+                                                    })
+                                                    .map((story) => {
                                                     const averageEstimation = getStoryAverageEstimation(story.id);
                                                     return (
-                                                        <div key={story.id} className="bg-green-50 p-4 rounded-lg shadow-sm border border-green-200">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-3">
-                                                                    {story.numberUrl ? (
-                                                                        <a
-                                                                            href={story.numberUrl}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="bg-green-100 text-green-800 px-3 py-2 rounded text-lg font-medium hover:bg-green-200 hover:text-green-900 transition-colors cursor-pointer"
-                                                                            title={`Open ${story.numberUrl}`}
-                                                                        >
-                                                                            {story.number || 'N/A'}
-                                                                            <svg className="inline-block ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                                            </svg>
-                                                                        </a>
-                                                                    ) : (
-                                                                        <span className="bg-green-100 text-green-800 px-3 py-2 rounded text-lg font-medium">
-                                                                            {story.number || story.title?.split(' ')[0] || 'N/A'}
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium">
-                                                                        ✓ Complete
+                                                        <div key={story.id} className="bg-green-50 p-2 rounded border flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                {story.numberUrl ? (
+                                                                    <a
+                                                                        href={story.numberUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium hover:bg-green-300"
+                                                                        title={`Open ${story.numberUrl}`}
+                                                                    >
+                                                                        {story.number || 'N/A'} ↗
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                                                                        {story.number || story.title?.split(' ')[0] || 'N/A'}
                                                                     </span>
-                                                                    {story.restrictions && story.restrictions.devOnly && (
-                                                                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                                                                            👨‍💻 Dev Only
-                                                                        </span>
-                                                                    )}
-                                                                    {story.restrictions && story.restrictions.qaOnly && (
-                                                                        <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                                                                            🧪 QA Only
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="text-right">
-                                                                        <p className="text-sm text-gray-600">Average Estimation</p>
-                                                                        <p className="text-2xl font-bold text-green-700">{averageEstimation}</p>
-                                                                    </div>
-                                                                    
-                                                                    {user.role === 'PO' && (
-                                                                        <button
-                                                                            onClick={() => markStoryIncomplete(story.id)}
-                                                                            className="px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 text-sm"
-                                                                            title="Mark as Incomplete"
-                                                                        >
-                                                                            Reopen
-                                                                        </button>
-                                                                    )}
-                                                                </div>
+                                                                )}
+                                                                <span className="text-xs text-gray-600 truncate max-w-xs">
+                                                                    {story.summary || story.title || 'No summary'}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="bg-green-200 px-2 py-1 rounded text-xs font-bold text-green-800">
+                                                                    {averageEstimation} pts
+                                                                </span>
+                                                                {user.role === 'PO' && (
+                                                                    <button
+                                                                        onClick={() => markStoryIncomplete(story.id)}
+                                                                        className="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700"
+                                                                        title="Reopen story"
+                                                                    >
+                                                                        Reopen
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -1985,7 +2203,7 @@
 
                         {/* Footer */}
                         <div className="text-center mt-12 text-gray-500 text-sm">
-                            <p>Story points are saved automatically to the server for team collaboration</p>
+                            <p>Story points are saved automatically (server when available, browser storage as fallback)</p>
                         </div>
                     </div>
                 </div>
