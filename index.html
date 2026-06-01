@@ -183,7 +183,17 @@
             // API Configuration
             const API_BASE = window.location.origin + '/api';
 
-            // API Helper functions
+            // Check if server is available
+            const isServerAvailable = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/health`);
+                    return response.ok;
+                } catch {
+                    return false;
+                }
+            };
+
+            // API Helper functions with localStorage fallback
             const api = {
                 async getSession(sessionId) {
                     try {
@@ -193,8 +203,10 @@
                         }
                         return null;
                     } catch (error) {
-                        console.error('Error fetching session:', error);
-                        return null;
+                        console.error('Server unavailable, using localStorage fallback');
+                        // Fallback to localStorage
+                        const savedData = localStorage.getItem(`session_${sessionId}`);
+                        return savedData ? JSON.parse(savedData) : null;
                     }
                 },
 
