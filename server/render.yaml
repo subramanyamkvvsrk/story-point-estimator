@@ -1,8 +1,13 @@
 services:
   - type: web
-    name: story-point-estimator
+    name: story-point-estimator-backend
     env: node
     plan: free
     buildCommand: cd server && npm install
     startCommand: cd server && npm start
     healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
