@@ -210,7 +210,7 @@
             
             const API_BASE = isLocalHost
                 ? 'http://localhost:3001/api'  // Local development
-                : 'https://story-point-estimator-backend.onrender.com/api';  // Production
+                : '/api';  // Production - same domain, no CORS issues!
             
             // Debug logging for environment detection
             console.log('🌐 Environment Detection:');
