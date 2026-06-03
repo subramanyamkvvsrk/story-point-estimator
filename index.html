@@ -204,9 +204,19 @@
             };
 
             // API Configuration - Dynamic based on environment
-            const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            const isLocalHost = window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1' ||
+                               window.location.hostname === '0.0.0.0';
+            
+            const API_BASE = isLocalHost
                 ? 'http://localhost:3001/api'  // Local development
-                : 'https://story-point-estimator-backend.onrender.com/api';  // Production on Render
+                : 'https://story-point-estimator-backend.onrender.com/api';  // Production
+            
+            // Debug logging for environment detection
+            console.log('🌐 Environment Detection:');
+            console.log('- Hostname:', window.location.hostname);
+            console.log('- Is Local Host:', isLocalHost);
+            console.log('- API Base URL:', API_BASE);
 
             // Check if server is available
             const isServerAvailable = async () => {
