@@ -12,6 +12,7 @@ const corsOptions = {
     origin: [
         'http://localhost:3000',
         'http://localhost:3001', 
+        'http://127.0.0.1:64317', // Browser preview proxy
         'https://story-point-estimator.onrender.com',
         'https://subramanyamkvvsrk.github.io'
     ],
