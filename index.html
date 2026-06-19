@@ -6,7 +6,7 @@
     <title>Story Point Estimator</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -37,62 +37,128 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Simple icon components
-        const PlusIcon = () => (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-        );
+        // Simple icon components (converted to React.createElement to avoid JSX)
+        const PlusIcon = () => React.createElement('svg', {
+            className: 'h-4 w-4',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M12 6v6m0 0v6m0-6h6m-6 0H6'
+        }));
 
-        const TrashIcon = () => (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-        );
+        const TrashIcon = () => React.createElement('svg', {
+            className: 'h-4 w-4',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+        }));
 
-        const EditIcon = () => (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-        );
+        const EditIcon = () => React.createElement('svg', {
+            className: 'h-4 w-4',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+        }));
 
-        const TargetIcon = () => (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        );
+        const TargetIcon = () => React.createElement('svg', {
+            className: 'h-5 w-5',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+        }));
 
-        const BarChartIcon = () => (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-        );
+        const BarChartIcon = () => React.createElement('svg', {
+            className: 'h-5 w-5',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+        }));
 
-        const UserIcon = () => (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-        );
+        const UserIcon = () => React.createElement('svg', {
+            className: 'h-5 w-5',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+        }));
 
-        const LogoutIcon = () => (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-        );
+        const LogoutIcon = () => React.createElement('svg', {
+            className: 'h-4 w-4',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1'
+        }));
 
-        const UsersIcon = () => (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-            </svg>
-        );
+        const UsersIcon = () => React.createElement('svg', {
+            className: 'h-5 w-5',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z'
+        }));
 
-        const DashboardIcon = () => (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-        );
+        const DashboardIcon = () => React.createElement('svg', {
+            className: 'h-4 w-4',
+            fill: 'none',
+            stroke: 'currentColor',
+            viewBox: '0 0 24 24'
+        }, React.createElement('path', {
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: 2,
+            d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+        }));
 
         function App() {
+            // ====== UTILITY FUNCTIONS ======
+            // Safe JSON parsing with error handling
+            const safeJsonParse = (jsonString, fallback = null) => {
+                try {
+                    return jsonString ? JSON.parse(jsonString) : fallback;
+                } catch (error) {
+                    console.warn('❌ Invalid JSON data encountered:', error.message);
+                    return fallback;
+                }
+            };
+            // ================================
+            
             // ====== FEATURE CONFIGURATION FLAGS ======
             // Set these to true/false to enable/disable features
             const FEATURES = {
@@ -100,7 +166,13 @@
                 ESTIMATION_PROGRESS_BAR: false,       // Smart Estimation Progress Bar - DISABLED
                 MANAGE_ESTIMATION_REASONS: true,      // Enable/disable estimation reasons management and selection
             };
-            // =========================================
+            
+            // ====== AUDIT LOG CONFIGURATION ======
+            const AUDIT_CONFIG = {
+                RETENTION_DAYS: 30,                   // Keep audit logs for 30 days (configurable)
+                ENABLE_AUDIT_DASHBOARD: true,         // Show audit log button to users
+            };
+            // ======================================
             
             const [user, setUser] = useState(null);
             const [loginName, setLoginName] = useState('');
@@ -211,7 +283,7 @@
                                window.location.port === '64317'; // Browser preview proxy
             
             const API_BASE = isLocalHost
-                ? 'http://localhost:3001/api'  // Local development
+                ? 'http://127.0.0.1:53849/api'  // Local development - matches our server
                 : '/api';  // Production - same domain, no CORS issues!
             
             // Debug logging for environment detection
@@ -249,7 +321,7 @@
                         console.error('Server unavailable, using localStorage fallback');
                         // Fallback to localStorage
                         const savedData = localStorage.getItem(`session_${sessionId}`);
-                        return savedData ? JSON.parse(savedData) : null;
+                        return safeJsonParse(savedData, null);
                     }
                 },
 
@@ -331,7 +403,7 @@
                         // Fallback to localStorage - add participant to existing session
                         const existingSession = localStorage.getItem(`session_${sessionId}`);
                         if (existingSession) {
-                            const session = JSON.parse(existingSession);
+                            const session = safeJsonParse(existingSession, {});
                             if (!session.participants) session.participants = [];
                             
                             // Check for duplicate PO before adding
@@ -382,7 +454,10 @@
             useEffect(() => {
                 const savedUser = localStorage.getItem('storyPointEstimatorUser');
                 if (savedUser) {
-                    setUser(JSON.parse(savedUser));
+                    const userData = safeJsonParse(savedUser, null);
+                    if (userData) {
+                        setUser(userData);
+                    }
                 }
                 
                 // Check for session ID in URL parameters first
@@ -716,6 +791,11 @@
                             qaReason: typeof estimationData === 'object' ? estimationData.qaReason : null,
                             timestamp: typeof estimationData === 'object' ? estimationData.timestamp : null
                         };
+                    }).sort((a, b) => {
+                        // Sort by story points in descending order
+                        const pointsA = parseFloat(a.points) || 0;
+                        const pointsB = parseFloat(b.points) || 0;
+                        return pointsB - pointsA;
                     }),
                     notEstimated: notEstimatedUsers.map(userId => {
                         const [name, role] = userId.split('_');
@@ -759,9 +839,9 @@
                     return;
                 }
 
-                // Prepare data for CSV
-                const csvData = [];
-                csvData.push(['Story Number', 'JIRA Link', 'Story Summary', 'Restrictions', 'Developer Average', 'QA Average', 'Overall Average', 'Total Estimations']);
+                // Prepare story analysis data
+                const storyAnalysisData = [];
+                storyAnalysisData.push(['Story Number', 'JIRA Link', 'Story Summary', 'Restrictions', 'Developer Average', 'QA Average', 'Overall Average', 'Total Estimations']);
 
                 stories.forEach(story => {
                     const devAverage = getRoleSpecificAverage(story.id, 'Dev');
@@ -785,7 +865,7 @@
                     const storyNumber = story.number || 'N/A';
                     const jiraLink = story.numberUrl || '';
                     
-                    csvData.push([
+                    storyAnalysisData.push([
                         storyNumber,
                         jiraLink,
                         story.summary || story.title || 'No summary',
@@ -797,17 +877,131 @@
                     ]);
                 });
 
-                // Convert to CSV format
-                const csvContent = csvData.map(row => 
-                    row.map(cell => {
-                        // Escape quotes and wrap in quotes if contains comma
-                        const cellStr = String(cell);
-                        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-                            return `"${cellStr.replace(/"/g, '""')}"`;
-                        }
-                        return cellStr;
-                    }).join(',')
-                ).join('\n');
+                // Prepare deviation analysis data
+                const deviationAnalysisHeaders = [
+                    'User', 'Role', 'Total Estimates', 'Average Deviation', 'Over Estimate %', 
+                    'Under Estimate %', 'Consistency Score', 'Deviation Pattern', 'Typical Deviation Range'
+                ];
+
+                // Calculate user deviation metrics
+                const userMetrics = {};
+                
+                stories.forEach(story => {
+                    const storyEstimations = currentSession.estimations[story.id] || {};
+                    const estimates = Object.entries(storyEstimations).map(([userId, data]) => {
+                        const points = typeof data === 'object' ? data.points : data;
+                        const role = userId.split('_')[1];
+                        return { userId, points: parseFloat(points) || 0, role };
+                    });
+
+                    if (estimates.length > 1) { // Need at least 2 estimates to calculate average
+                        const overallAvg = estimates.reduce((sum, e) => sum + e.points, 0) / estimates.length;
+                        
+                        estimates.forEach(estimate => {
+                            const { userId, points, role } = estimate;
+                            if (!userMetrics[userId]) {
+                                userMetrics[userId] = {
+                                    role,
+                                    estimates: [],
+                                    deviations: [],
+                                    overEstimates: 0,
+                                    underEstimates: 0,
+                                    totalEstimates: 0
+                                };
+                            }
+                            
+                            const deviation = points - overallAvg;
+                            userMetrics[userId].estimates.push(points);
+                            userMetrics[userId].deviations.push(deviation);
+                            userMetrics[userId].totalEstimates++;
+                            
+                            if (deviation > 0.5) userMetrics[userId].overEstimates++;
+                            else if (deviation < -0.5) userMetrics[userId].underEstimates++;
+                        });
+                    }
+                });
+
+                const deviationAnalysisData = [deviationAnalysisHeaders];
+                Object.entries(userMetrics).forEach(([userId, metrics]) => {
+                    const avgDeviation = metrics.deviations.length > 0 
+                        ? (metrics.deviations.reduce((a, b) => a + b, 0) / metrics.deviations.length).toFixed(2)
+                        : '0.00';
+                    
+                    const overEstimatePercent = metrics.totalEstimates > 0 
+                        ? ((metrics.overEstimates / metrics.totalEstimates) * 100).toFixed(1)
+                        : '0.0';
+                    
+                    const underEstimatePercent = metrics.totalEstimates > 0 
+                        ? ((metrics.underEstimates / metrics.totalEstimates) * 100).toFixed(1)
+                        : '0.0';
+
+                    // Determine consistency score and pattern
+                    let consistencyScore = 'Balanced';
+                    let deviationPattern = 'Neutral';
+                    
+                    const overPercent = parseFloat(overEstimatePercent);
+                    const underPercent = parseFloat(underEstimatePercent);
+                    
+                    if (overPercent >= 70) {
+                        consistencyScore = 'High Over-Estimator';
+                        deviationPattern = 'Consistently High';
+                    } else if (underPercent >= 70) {
+                        consistencyScore = 'High Under-Estimator';  
+                        deviationPattern = 'Consistently Low';
+                    } else if (overPercent >= 60) {
+                        consistencyScore = 'Moderate Over-Estimator';
+                        deviationPattern = 'Generally High';
+                    } else if (underPercent >= 60) {
+                        consistencyScore = 'Moderate Under-Estimator';
+                        deviationPattern = 'Generally Low';
+                    }
+
+                    // Calculate typical deviation range
+                    const sortedDeviations = [...metrics.deviations].sort((a, b) => a - b);
+                    const minDev = sortedDeviations[0] || 0;
+                    const maxDev = sortedDeviations[sortedDeviations.length - 1] || 0;
+                    const deviationRange = `${minDev.toFixed(1)} to ${maxDev.toFixed(1)}`;
+
+                    deviationAnalysisData.push([
+                        userId,
+                        metrics.role,
+                        metrics.totalEstimates,
+                        avgDeviation,
+                        `${overEstimatePercent}%`,
+                        `${underEstimatePercent}%`,
+                        consistencyScore,
+                        deviationPattern,
+                        deviationRange
+                    ]);
+                });
+
+                // Combine both sections into multi-section CSV
+                const csvSections = [
+                    '=== STORY ANALYSIS ===',
+                    storyAnalysisData.map(row => 
+                        row.map(cell => {
+                            const cellStr = String(cell);
+                            if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                                return `"${cellStr.replace(/"/g, '""')}"`;
+                            }
+                            return cellStr;
+                        }).join(',')
+                    ).join('\n'),
+                    '',
+                    '',
+                    '=== ESTIMATION DEVIATION ANALYSIS ===',
+                    deviationAnalysisData.map(row => 
+                        row.map(cell => {
+                            const cellStr = String(cell);
+                            if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                                return `"${cellStr.replace(/"/g, '""')}"`;
+                            }
+                            return cellStr;
+                        }).join(',')
+                    ).join('\n')
+                ];
+
+                const csvContent = csvSections.join('\n');
 
                 // Create and trigger download
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1130,6 +1324,12 @@
                     
                     alert('Session has been closed successfully. All participants will be logged out.');
                 }
+            };
+
+            const openAuditLog = () => {
+                // Open audit log dashboard in new tab
+                const auditUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/admin`;
+                window.open(auditUrl, '_blank');
             };
 
             const getSessionTimeInfo = () => {
@@ -1486,13 +1686,15 @@
                                          user.role === 'SM' ? 'Scrum Master' : user.role}
                                     </span>
                                 </div>
-                                <button
-                                    onClick={() => setShowDashboard(!showDashboard)}
-                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md mr-2"
-                                    title="Toggle Dashboard"
-                                >
-                                    <DashboardIcon />
-                                </button>
+                                {user.role === 'PO' && (
+                                    <button
+                                        onClick={() => setShowDashboard(!showDashboard)}
+                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md mr-2"
+                                        title="Dashboard"
+                                    >
+                                        <DashboardIcon />
+                                    </button>
+                                )}
                                 <button
                                     onClick={leaveSession}
                                     className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md mr-2"
@@ -1500,6 +1702,17 @@
                                 >
                                     <UsersIcon />
                                 </button>
+                                {AUDIT_CONFIG.ENABLE_AUDIT_DASHBOARD && (user.role === 'PO' || user.role === 'SM') && (
+                                    <button
+                                        onClick={openAuditLog}
+                                        className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md mr-2"
+                                        title="View Audit Logs (PO/SM Only)"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </button>
+                                )}
                                 {user.role === 'PO' && (() => {
                                     const timeInfo = getSessionTimeInfo();
                                     return (
