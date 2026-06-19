@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Story Point Estimator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .log-entry {
+            transition: all 0.2s ease;
+        }
+        .log-entry:hover {
+            background-color: #f9fafb;
+        }
+        .json-details {
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">📊 Audit Log Dashboard</h1>
+            <p class="text-gray-600">Monitor and analyze Story Point Estimator activities</p>
+            <div class="mt-4">
+                <a href="/" class="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    ← Back to App
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="text-2xl font-bold text-blue-600" id="totalLogs">-</div>
+                <div class="text-sm text-gray-600">Total Log Entries</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="text-2xl font-bold text-green-600" id="totalSessions">-</div>
+                <div class="text-sm text-gray-600">Total Sessions</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="text-2xl font-bold text-purple-600" id="totalUsers">-</div>
+                <div class="text-sm text-gray-600">Unique Users</div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="text-2xl font-bold text-orange-600" id="lastActivity">-</div>
+                <div class="text-sm text-gray-600">Last Activity</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">🔍 Filters</h2>
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+                    <input type="date" id="filterDateFrom" class="w-full p-2 border border-gray-300 rounded-md text-sm" onchange="loadSessionIds()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+                    <input type="date" id="filterDateTo" class="w-full p-2 border border-gray-300 rounded-md text-sm" onchange="loadSessionIds()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Session ID</label>
+                    <select id="filterSessionId" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+                        <option value="">All Sessions</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                    <input type="text" id="filterUserId" class="w-full p-2 border border-gray-300 rounded-md text-sm" placeholder="John_PO">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Event Type</label>
+                    <select id="filterEventType" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+                        <option value="">All Events</option>
+                        <option value="SESSION_CREATED">Session Created</option>
+                        <option value="SESSION_JOINED">Session Joined</option>
+                        <option value="ESTIMATION_PROVIDED">Estimation Provided</option>
+                        <option value="STORY_CREATED">Story Created</option>
+                        <option value="STORY_UPDATED">Story Updated</option>
+                        <option value="STORY_DELETED">Story Deleted</option>
+                        <option value="USER_LOGIN">User Login</option>
+                        <option value="USER_LOGOUT">User Logout</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button onclick="applyFilters()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
+                        Apply Filters
+                    </button>
+                </div>
+            </div>
+            <div class="mt-4 flex gap-2">
+                <button onclick="clearFilters()" class="bg-gray-500 text-white px-3 py-2 rounded-md hover:bg-gray-600 text-sm">
+                    Clear Filters
+                </button>
+                <button onclick="exportLogs()" class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm">
+                    📥 Export Audit CSV
+                </button>
+                <button onclick="exportEstimationAnalysis()" class="bg-orange-600 text-white px-3 py-2 rounded-md hover:bg-orange-700 text-sm">
+                    📊 Export Deviation Analysis
+                </button>
+                <button onclick="refreshLogs()" class="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 text-sm">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Event Type Statistics -->
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">📈 Event Distribution</h2>
+            <div id="eventStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Audit Logs Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-semibold">📋 Audit Logs</h2>
+                <p class="text-sm text-gray-600 mt-1">Showing last <span id="logCount">0</span> entries</p>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Loading state -->
+            <div id="loadingState" class="p-8 text-center text-gray-500">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p class="mt-2">Loading audit logs...</p>
+            </div>
+            
+            <!-- No logs state -->
+            <div id="noLogsState" class="p-8 text-center text-gray-500 hidden">
+                <p>No audit logs found matching the current filters.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLogs = [];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadLogs();
+            loadSessionIds(); // Load all session IDs initially
+            
+            // Set default date filter (today)
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('filterDateFrom').value = today;
+        });
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/audit-logs/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalLogs').textContent = stats.totalLogs;
+                document.getElementById('totalSessions').textContent = stats.totalSessions;
+                document.getElementById('totalUsers').textContent = stats.totalUsers;
+                
+                // Display event type statistics
+                const eventStatsContainer = document.getElementById('eventStats');
+                eventStatsContainer.innerHTML = stats.eventTypeStats.map(stat => `
+                    <div class="text-center p-3 border border-gray-200 rounded-lg">
+                        <div class="text-lg font-bold text-blue-600">${stat.count}</div>
+                        <div class="text-xs text-gray-600">${stat.event_type.replace('_', ' ')}</div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load session IDs based on date filters
+        async function loadSessionIds() {
+            try {
+                const queryParams = new URLSearchParams();
+                
+                const dateFrom = document.getElementById('filterDateFrom').value;
+                const dateTo = document.getElementById('filterDateTo').value;
+                
+                if (dateFrom) queryParams.append('dateFrom', dateFrom);
+                if (dateTo) queryParams.append('dateTo', dateTo);
+                
+                const response = await fetch(`/api/audit-logs/session-ids?${queryParams}`);
+                const data = await response.json();
+                
+                const sessionSelect = document.getElementById('filterSessionId');
+                const currentValue = sessionSelect.value; // Preserve current selection
+                
+                // Clear existing options except "All Sessions"
+                sessionSelect.innerHTML = '<option value="">All Sessions</option>';
+                
+                // Add session ID options
+                data.sessionIds.forEach(sessionId => {
+                    const option = document.createElement('option');
+                    option.value = sessionId;
+                    option.textContent = sessionId;
+                    if (sessionId === currentValue) {
+                        option.selected = true;
+                    }
+                    sessionSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading session IDs:', error);
+            }
+        }
+
+        // Load audit logs
+        async function loadLogs(filters = {}) {
+            const loadingState = document.getElementById('loadingState');
+            const noLogsState = document.getElementById('noLogsState');
+            const tableBody = document.getElementById('logsTableBody');
+            
+            loadingState.classList.remove('hidden');
+            noLogsState.classList.add('hidden');
+            tableBody.innerHTML = '';
+
+            try {
+                const queryParams = new URLSearchParams();
+                Object.entries(filters).forEach(([key, value]) => {
+                    if (value) queryParams.append(key, value);
+                });
+
+                const response = await fetch(`/api/audit-logs?${queryParams}`);
+                const logs = await response.json();
+                
+                currentLogs = logs;
+                loadingState.classList.add('hidden');
+                
+                if (logs.length === 0) {
+                    noLogsState.classList.remove('hidden');
+                    document.getElementById('logCount').textContent = '0';
+                    return;
+                }
+
+                // Update log count
+                document.getElementById('logCount').textContent = logs.length;
+
+                // Update last activity
+                if (logs.length > 0) {
+                    const lastActivity = new Date(logs[0].timestamp);
+                    document.getElementById('lastActivity').textContent = lastActivity.toLocaleString();
+                }
+
+                // Populate table
+                tableBody.innerHTML = logs.map(log => {
+                    const eventTypeColor = getEventTypeColor(log.event_type);
+                    return `
+                        <tr class="log-entry">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${new Date(log.timestamp).toLocaleString()}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs rounded-full ${eventTypeColor}">
+                                    ${log.event_type}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${log.user_id || '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-mono">
+                                ${log.session_id ? log.session_id.substring(0, 15) + '...' : '-'}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-700">
+                                <div class="json-details">
+                                    <strong>${log.details.action || 'N/A'}</strong>
+                                    ${Object.entries(log.details).filter(([k,v]) => k !== 'action').map(([k,v]) => 
+                                        `<br><span class="text-gray-500">${k}:</span> ${JSON.stringify(v)}`
+                                    ).join('')}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                                ${log.ip_address || '-'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                loadingState.classList.add('hidden');
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 text-red-600">Error loading logs</td></tr>';
+            }
+        }
+
+        // Get color class for event type
+        function getEventTypeColor(eventType) {
+            const colors = {
+                'SESSION_CREATED': 'bg-green-100 text-green-800',
+                'SESSION_JOINED': 'bg-blue-100 text-blue-800',
+                'ESTIMATION_PROVIDED': 'bg-purple-100 text-purple-800',
+                'STORY_CREATED': 'bg-indigo-100 text-indigo-800',
+                'STORY_UPDATED': 'bg-orange-100 text-orange-800',
+                'STORY_DELETED': 'bg-red-100 text-red-800',
+                'USER_LOGIN': 'bg-emerald-100 text-emerald-800',
+                'USER_LOGOUT': 'bg-gray-100 text-gray-800'
+            };
+            return colors[eventType] || 'bg-gray-100 text-gray-800';
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const filters = {
+                sessionId: document.getElementById('filterSessionId').value,
+                userId: document.getElementById('filterUserId').value,
+                eventType: document.getElementById('filterEventType').value,
+                dateFrom: document.getElementById('filterDateFrom').value,
+                dateTo: document.getElementById('filterDateTo').value
+            };
+            
+            loadLogs(filters);
+        }
+
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('filterSessionId').value = '';
+            document.getElementById('filterUserId').value = '';
+            document.getElementById('filterEventType').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            
+            loadSessionIds(); // Reload all session IDs when filters are cleared
+            loadLogs();
+        }
+
+        // Export logs as CSV
+        function exportLogs() {
+            const filters = {
+                sessionId: document.getElementById('filterSessionId').value,
+                userId: document.getElementById('filterUserId').value,
+                eventType: document.getElementById('filterEventType').value,
+                dateFrom: document.getElementById('filterDateFrom').value,
+                dateTo: document.getElementById('filterDateTo').value
+            };
+
+            const queryParams = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value) queryParams.append(key, value);
+            });
+
+            window.open(`/api/audit-logs/export?${queryParams}`, '_blank');
+        }
+
+        // Export estimation deviation analysis CSV
+        function exportEstimationAnalysis() {
+            const sessionId = document.getElementById('filterSessionId').value;
+            
+            if (!sessionId) {
+                alert('Please select a specific session to export estimation deviation analysis.');
+                return;
+            }
+
+            const queryParams = new URLSearchParams();
+            queryParams.append('sessionId', sessionId);
+
+            window.open(`/api/estimation-analysis/export?${queryParams}`, '_blank');
+        }
+
+        // Refresh logs
+        function refreshLogs() {
+            loadStats();
+            applyFilters();
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                loadStats();
+                applyFilters();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
